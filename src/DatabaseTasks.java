@@ -25,11 +25,7 @@ class DatabaseTasks {
 
         @Override
         public void run() {
-            Table newTable = new Table(columnNames, columnTypes);
-            if (tableMap.putIfAbsent(tableName, newTable) != null) {
-                // A table with the same name already exists
-                throw new DatabaseExceptions.InvalidDataException();
-            }
+
         }
     }
 }

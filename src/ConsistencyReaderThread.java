@@ -27,7 +27,7 @@ public class ConsistencyReaderThread extends Thread{
 		for(int i=0;i<100000;i++) {
 			results = db.select("Students0", operations, "grade0 > -1");
 			for(int index=1; index<results.size(); index++)
-				if((int)results.get(index).get(0)!=(int)results.get(0).get(0)) {
+				if(!results.get(0).isEmpty() && !results.get(index).isEmpty() && (int)results.get(index).get(0)!=(int)results.get(0).get(0)) {
 					System.out.println("Select/Insert Consistency FAIL"+results.get(index).get(0)+" "+results.get(0).get(0));
 					passed = false;
 				}
@@ -39,7 +39,7 @@ public class ConsistencyReaderThread extends Thread{
 		for(int i=0;i<20;i++) {
 			results = db.select("Students0", operations, "grade0 > -1");
 			for(int index=1; index<results.size(); index++)
-				if((int)results.get(index).get(0)!=(int)results.get(0).get(0)) {
+				if(!results.get(0).isEmpty() && !results.get(index).isEmpty() && (int)results.get(index).get(0)!=(int)results.get(0).get(0)) {
 					System.out.println("Select/Update Consistency FAIL"+results.get(index).get(0)+" "+results.get(0).get(0));
 					passed = false;
 				}
@@ -48,14 +48,17 @@ public class ConsistencyReaderThread extends Thread{
 			System.out.println("Select/Update Consistency PASS");
 		passed = true;
 		barrierWrapper();
-		int correctSum = (int) results.get(0).get(0);
-		for(int i=0;i<20;i++) {
-			results = db.select("Students0", operations, "grade0 > -1");
-			for(int index=0; index<results.size(); index++)
-				if((int)results.get(index).get(0)!=correctSum) {
-					System.out.println("Transactions Consistency FAIL" + results.get(index).get(0)+" "+correctSum);
-					passed = false;
-				}
+		
+		if (!results.get(0).isEmpty()) {
+			int correctSum = (int) results.get(0).get(0);
+			for(int i=0;i<20;i++) {
+				results = db.select("Students0", operations, "grade0 > -1");
+				for(int index=0; index<results.size(); index++)
+					if(!results.get(index).isEmpty() && (int)results.get(index).get(0)!=correctSum) {
+						System.out.println("Transactions Consistency FAIL" + results.get(index).get(0)+" "+correctSum);
+						passed = false;
+					}
+			}
 		}
 		if(passed)
 			System.out.println("Transactions Consistency PASS");

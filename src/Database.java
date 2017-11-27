@@ -40,25 +40,38 @@ public class Database implements MyDatabase {
     public void createTable(final String tableName,
                             final String[] columnNames,
                             final String[] columnTypes) {
-        // Submit the task of creating a new table to the database worker service
-        workerService.submit(
-                new DatabaseTasks.TableCreationTask(tableMap, tableName, columnNames, columnTypes));
+        Table newTable = new Table(columnNames, columnTypes);
+        if (tableMap.putIfAbsent(tableName, newTable) != null) {
+            // A table with the same name already exists
+            throw new DatabaseExceptions.InvalidDataException();
+        }
     }
 
     @Override
-    public ArrayList<ArrayList<Object>> select(String tableName, String[] operations, String condition) {
-        // TODO
-        return null;
+    public ArrayList<ArrayList<Object>> select(final String tableName, final String[] operations,
+                                               final String condition) {
+        Table table = tableMap.get(tableName);
+        table.lock();
+        ArrayList<ArrayList<Object>> result = table.select(operations, condition);
+        table.unlock();
+        return result;
     }
 
     @Override
-    public void update(String tableName, ArrayList<Object> values, String condition) {
-        // TODO
+    public void update(final String tableName, final ArrayList<Object> values,
+                       final String condition) {
+        Table table = tableMap.get(tableName);
+        table.lock();
+        table.update(values, condition);
+        table.unlock();
     }
 
     @Override
-    public void insert(String tableName, ArrayList<Object> values) {
-        // TODO
+    public void insert(final String tableName, final ArrayList<Object> values) {
+        Table table = tableMap.get(tableName);
+        table.lock();
+        table.insert(values);
+        table.unlock();
     }
 
     @Override
