@@ -66,7 +66,7 @@ public class Database implements MyDatabase {
     public ArrayList<ArrayList<Object>> select(final String tableName, final String[] operations,
                                                final String condition) {
         Table table = tableMap.get(tableName);
-        table.lock();
+        table.lockRead();
 
         table.checkParametersSelect(operations, condition);
         ArrayList<ArrayList<Object>> result = table.instantiateResultList(operations);
@@ -76,7 +76,7 @@ public class Database implements MyDatabase {
 
         // No table entry met the condition
         if (indexes.size() == 0) {
-            table.unlock();
+            table.unlockRead();
             return result;
         }
 
@@ -145,7 +145,7 @@ public class Database implements MyDatabase {
             }
         }
 
-        table.unlock();
+        table.unlockRead();
         return result;
     }
 
@@ -153,7 +153,7 @@ public class Database implements MyDatabase {
     public void update(final String tableName, final ArrayList<Object> values,
                        final String condition) {
         Table table = tableMap.get(tableName);
-        table.lock();
+        table.lockWrite();
 
         table.checkParametersUpdate(values, condition);
         table.checkDataTypesOfNewRow(values);
@@ -168,25 +168,29 @@ public class Database implements MyDatabase {
             }
         }
 
-        table.unlock();
+        table.unlockWrite();
     }
 
     @Override
     public void insert(final String tableName, final ArrayList<Object> values) {
         Table table = tableMap.get(tableName);
-        table.lock();
+        table.lockWrite();
         table.insert(values);
-        table.unlock();
+        table.unlockWrite();
     }
 
     @Override
     public void startTransaction(final String tableName) {
-        tableMap.get(tableName).lock();
+        Table table = tableMap.get(tableName);
+        table.lockWrite();
+        table.lockRead();
     }
 
     @Override
     public void endTransaction(final String tableName) {
-        tableMap.get(tableName).unlock();
+        Table table = tableMap.get(tableName);
+        table.unlockRead();
+        table.unlockWrite();
     }
 
     /**

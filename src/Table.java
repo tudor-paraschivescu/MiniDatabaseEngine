@@ -4,6 +4,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Class of a database table, that stores the data by columns.
@@ -45,7 +46,7 @@ class Table {
     /**
      * Used to keep all operations on a table of blocking type.
      */
-    private ReentrantLock lock = new ReentrantLock();
+    private ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     /**
      * Constructor for a database table with the given column names and data types.
@@ -102,18 +103,20 @@ class Table {
         return columnMap;
     }
 
-    /**
-     * Lock the table.
-     */
-    public void lock() {
-        lock.lock();
+    public void lockRead() {
+        lock.readLock().lock();
     }
 
-    /**
-     * Unlock the table.
-     */
-    public void unlock() {
-        lock.unlock();
+    public void unlockRead() {
+        lock.readLock().unlock();
+    }
+
+    public void lockWrite() {
+        lock.writeLock().lock();
+    }
+
+    public void unlockWrite() {
+        lock.writeLock().unlock();
     }
 
     /**
