@@ -2,6 +2,7 @@ import java.util.ArrayList;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 
+@SuppressWarnings("CheckStyle")
 public class ConsistencyReaderThread extends Thread{
 
 	private MyDatabase db;
@@ -24,7 +25,8 @@ public class ConsistencyReaderThread extends Thread{
 		ArrayList<ArrayList<Object>> results = null;
 		String[] operations = {"sum(grade0)", "sum(grade1)", "sum(grade2)", "sum(grade3)"};
 		boolean passed = true;
-		for(int i=0;i<100000;i++) {
+
+		for(int i=0;i<10_000;i++) {
 			results = db.select("Students0", operations, "grade0 > -1");
 			for(int index=1; index<results.size(); index++)
 				if(!results.get(0).isEmpty() && !results.get(index).isEmpty() && (int)results.get(index).get(0)!=(int)results.get(0).get(0)) {
@@ -32,6 +34,7 @@ public class ConsistencyReaderThread extends Thread{
 					passed = false;
 				}
 		}
+
 		if(passed)
 			System.out.println("Select/Insert Consistency PASS");
 		passed = true;

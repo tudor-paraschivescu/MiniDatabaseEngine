@@ -1,7 +1,15 @@
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 /**
  * Asynchronous Database System that implements the most basic commands (select, insert and update).
@@ -9,13 +17,20 @@ import java.util.concurrent.Executors;
  */
 public class Database implements MyDatabase {
 
-    /** Map the name of the tables to the corresponding table. */
+    /**
+     * Maps the name of the tables to the corresponding table.
+     * Can be used to create more tables in the same time from different users.
+     */
     private ConcurrentHashMap<String, Table> tableMap;
 
-    /** The number of threads that can work in the same time on the database. */
+    /**
+     * The number of threads that can work in the same time on the database.
+     */
     private int numWorkers;
 
-    /** The executor service that manages the active threads. */
+    /**
+     * The executor service that manages the database threads.
+     */
     private ExecutorService workerService;
 
     public Database() {
@@ -26,7 +41,7 @@ public class Database implements MyDatabase {
     @Override
     public void initDb(final int numWorkerThreads) {
         // Instantiate the executor that will schedule the tasks
-        this.numWorkers = numWorkerThreads;
+        numWorkers = numWorkerThreads;
         workerService = Executors.newFixedThreadPool(numWorkerThreads);
     }
 
@@ -52,7 +67,85 @@ public class Database implements MyDatabase {
                                                final String condition) {
         Table table = tableMap.get(tableName);
         table.lock();
-        ArrayList<ArrayList<Object>> result = table.select(operations, condition);
+
+        table.checkParametersSelect(operations, condition);
+        ArrayList<ArrayList<Object>> result = table.instantiateResultList(operations);
+
+        // The indexes that respect the condition
+        List<Integer> indexes = getIndexes(table, condition);
+
+        // No table entry met the condition
+        if (indexes.size() == 0) {
+            table.unlock();
+            return result;
+        }
+
+        for (int i = 0; i < operations.length; i++) {
+
+            String op = operations[i];
+            ArrayList<Object> column = table.getColumnMap().get(op);
+
+            if (column != null) {
+                // Operation is a column name
+                // TODO: PARALLELIZE ME
+                for (Integer index : indexes) {
+                    result.get(i).add(column.get(index));
+                }
+            } else {
+                // Operation is an aggregation function
+                ColumnNameAndFunctionType colAndFunc = Parser.parseAggregationFunction(op);
+                String columnName = colAndFunc.columnName;
+                Table.AggregateFunction funcType = colAndFunc.funcType;
+
+                List<List<Object>> partitions = null;
+                List<List<Integer>> indexesPartitions = null;
+
+                if (funcType != Table.AggregateFunction.COUNT) {
+                    // The function is accepted only on Integer columns
+                    if (table.getDataTypeMap().get(columnName) != Table.DataType.INTEGER) {
+                        throw new DatabaseExceptions.InvalidDataTypeException();
+                    }
+                    // Get the column on which the function is being applied on
+                    column = table.getColumnMap().get(columnName);
+
+                    // Partition the column so that each worker has an equal part to compute
+                    partitions = DatabaseTasks.partitionList(column, numWorkers);
+                    indexesPartitions = DatabaseTasks.partitionList(indexes, numWorkers);
+                }
+
+                switch (funcType) {
+                    case MIN:
+                        int min = search(partitions, indexesPartitions,
+                                (Integer a, Integer b) -> (a < b) ? a : b);
+                        result.get(i).add(min);
+                        break;
+
+                    case MAX:
+                        int max = search(partitions, indexesPartitions,
+                                (Integer a, Integer b) -> (a > b) ? a : b);
+                        result.get(i).add(max);
+                        break;
+
+                    case SUM:
+                        int sum = sum(partitions, indexesPartitions);
+                        result.get(i).add(sum);
+                        break;
+
+                    case AVG:
+                        sum = sum(partitions, indexesPartitions);
+                        result.get(i).add((float) sum / indexes.size());
+                        break;
+
+                    case COUNT:
+                        result.get(i).add(indexes.size());
+                        break;
+
+                    default:
+                        throw new DatabaseExceptions.UnknownFunctionException();
+                }
+            }
+        }
+
         table.unlock();
         return result;
     }
@@ -62,7 +155,21 @@ public class Database implements MyDatabase {
                        final String condition) {
         Table table = tableMap.get(tableName);
         table.lock();
-        table.update(values, condition);
+
+        table.checkParametersUpdate(values, condition);
+        table.checkDataTypesOfNewRow(values);
+
+        List<Integer> indexes = getIndexes(table, condition);
+
+        // TODO: PARALLELIZE ME
+        for (Integer index : indexes) {
+            Iterator<Object> valuesIterator = values.iterator();
+            for (Map.Entry<String, ArrayList<Object>> entry : table.getColumnMap().entrySet()) {
+                ArrayList<Object> column = entry.getValue();
+                column.set(index, valuesIterator.next());
+            }
+        }
+
         table.unlock();
     }
 
@@ -75,12 +182,143 @@ public class Database implements MyDatabase {
     }
 
     @Override
-    public void startTransaction(String tableName) {
-        // TODO
+    public void startTransaction(final String tableName) {
+        tableMap.get(tableName).lock();
     }
 
     @Override
-    public void endTransaction(String tableName) {
-        // TODO
+    public void endTransaction(final String tableName) {
+        tableMap.get(tableName).unlock();
+    }
+
+    /**
+     * Get the indexes of all the rows of a table where a certain condition is met
+     *
+     * @param table     the table where the search is done
+     * @param condition the condition
+     * @return a list with all the indexes
+     */
+    private List<Integer> getIndexes(final Table table, final String condition) {
+        // The indexes that respect the condition
+        List<Integer> indexes = new ArrayList<>();
+
+        if (!condition.isEmpty()) {
+            // Get the column that must be checked and the condition predicate
+            ColumnNameAndPredicate np = Parser.parseCondition(table.getDataTypeMap(), condition);
+            String columnName = np.columnName;
+            Predicate<Object> predicate = np.conditionPredicate;
+            ArrayList<Object> column = table.getColumnMap().get(columnName);
+
+            // Partition the column so that each worker has an equal part to compute
+            List<List<Object>> partitions = DatabaseTasks.partitionList(column, numWorkers);
+            List<Callable<List<Integer>>> tasks = new ArrayList<>(numWorkers);
+
+            // Create the tasks
+            for (List<Object> partition : partitions) {
+                tasks.add(new DatabaseTasks.ConditionCheckTask(partition, predicate));
+            }
+
+            // Wait for the tasks to end and reunite the lists in the indexes list
+            try {
+                List<Future<List<Integer>>> futures = workerService.invokeAll(tasks);
+                for (Future<List<Integer>> f : futures) {
+                    indexes.addAll(f.get());
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+                throw new RuntimeException();
+            }
+        } else {
+            // The condition is empty
+            for (int i = 0; i < table.getSize(); i++) {
+                indexes.add(i);
+            }
+        }
+
+        return indexes;
+    }
+
+    private int search(final List<List<Object>> partitions,
+                       final List<List<Integer>> indexesPartitons,
+                       final BiFunction<Integer, Integer, Integer> function) {
+
+        List<Callable<Integer>> tasks = new ArrayList<>(numWorkers);
+
+        // Create the tasks
+        for (int i = 0; i < numWorkers; i++) {
+            tasks.add(new DatabaseTasks.SearchTask(
+                    partitions.get(i),
+                    indexesPartitons.get(i),
+                    function));
+        }
+
+        // Wait for the tasks to end and compare the results
+        try {
+            int result = 0;
+            List<Future<Integer>> futures = workerService.invokeAll(tasks);
+            for (Future<Integer> f : futures) {
+                int value = f.get();
+                result = function.apply(result, value);
+            }
+            return result;
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
+    }
+
+    private int sum(final List<List<Object>> partitions,
+                       final List<List<Integer>> indexesPartitons) {
+
+        List<Callable<Long>> tasks = new ArrayList<>(numWorkers);
+
+        // Create the tasks
+        for (int i = 0; i < numWorkers; i++) {
+            tasks.add(new DatabaseTasks.SumTask(
+                    partitions.get(i),
+                    indexesPartitons.get(i)));
+        }
+
+        // Wait for the tasks to end and compare the results
+        try {
+            long sum = 0;
+            List<Future<Long>> futures = workerService.invokeAll(tasks);
+            for (Future<Long> f : futures) {
+                sum += f.get();
+            }
+
+            // In the consistency test, the value is cast to int and an exception would be thrown
+            return (int) sum;
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
+    }
+
+    /**
+     * Return type used after parsing a condition to keep both of the column name and predicate.
+     */
+    public static class ColumnNameAndPredicate {
+        String columnName;
+        Predicate<Object> conditionPredicate;
+
+        ColumnNameAndPredicate(final String columnName, final Predicate<Object> func) {
+            this.columnName = columnName;
+            this.conditionPredicate = func;
+        }
+    }
+
+    /**
+     * Return type used after parsing an aggregate function to keep both of
+     * the column name and type of the function.
+     */
+    public static class ColumnNameAndFunctionType {
+        private String columnName;
+        private Table.AggregateFunction funcType;
+
+        ColumnNameAndFunctionType(final String columnName, final Table.AggregateFunction funcType) {
+            this.columnName = columnName;
+            this.funcType = funcType;
+        }
     }
 }

@@ -32,7 +32,7 @@ public class ScalabilityTestThread extends Thread{
 		for(int partialJobId=0; partialJobId<jobsPerThread; partialJobId++) {
 			int jobId = (jobsPerThread * threadId) + partialJobId;
 			ArrayList<Object> values = new ArrayList<Object>();
-			for(int i = 0; i < 10_000_000; i++) {
+			for(int i = 0; i < 1_000_000; i++) {
 				values.clear();
 				values.add("Ion"+(i*(jobId+1)));
 				values.add(i*(jobId+1));

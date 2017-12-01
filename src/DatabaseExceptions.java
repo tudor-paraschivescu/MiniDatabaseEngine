@@ -38,4 +38,8 @@ public final class DatabaseExceptions {
     /** Runtime exception that will be thrown when an unknown function tries to be used. */
     public static class UnknownFunctionException extends RuntimeException {
     }
+
+    /** Runtime exception that will be thrown when an unknown task tries to be created. */
+    public static class UnknownTaskException extends RuntimeException {
+    }
 }

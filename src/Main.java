@@ -87,6 +87,7 @@ public class Main {
 		CyclicBarrier barrier = new CyclicBarrier(numThreads+1);
 		ConsistencyWriterThreads[] threads = new ConsistencyWriterThreads[numThreads];
 		ConsistencyReaderThread thread = new ConsistencyReaderThread(db, barrier);
+		long startTime = System.currentTimeMillis();
 		thread.start();
 		for(int threadId=1; threadId < numThreads; threadId++) {
 			threads[threadId] = new ConsistencyWriterThreads(db, barrier, threadId);
@@ -96,6 +97,8 @@ public class Main {
 		barrier.await();
 		barrier.await();
 
+		long endTime = System.currentTimeMillis();
+		System.out.println((endTime - startTime) / 1000 + " seconds");
 		for(int threadId=1; threadId<numThreads; threadId++) {
 			threads[threadId].join();
 		}

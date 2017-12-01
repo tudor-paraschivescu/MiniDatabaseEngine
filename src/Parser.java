@@ -30,7 +30,7 @@ public final class Parser {
     private Parser() {
     }
 
-    public static Table.ColumnNameAndPredicate parseCondition(
+    public static Database.ColumnNameAndPredicate parseCondition(
             final HashMap<String, Table.DataType> dataTypeMap, final String condition) throws
             DatabaseExceptions.InvalidConditionException,
             DatabaseExceptions.InvalidDataTypeException,
@@ -89,7 +89,7 @@ public final class Parser {
             }
         }
 
-        return new Table.ColumnNameAndPredicate(columnName, func);
+        return new Database.ColumnNameAndPredicate(columnName, func);
     }
 
     /**
@@ -110,7 +110,7 @@ public final class Parser {
         }
     }
 
-    public static Table.ColumnNameAndFunctionType parseAggregationFunction(
+    public static Database.ColumnNameAndFunctionType parseAggregationFunction(
             final String operation) throws DatabaseExceptions.NullOrEmptyDataException {
 
         if (operation == null || operation.isEmpty()) {
@@ -148,7 +148,7 @@ public final class Parser {
                 throw new DatabaseExceptions.UnknownFunctionException();
         }
 
-        return new Table.ColumnNameAndFunctionType(columnName, func);
+        return new Database.ColumnNameAndFunctionType(columnName, func);
     }
 
 }
