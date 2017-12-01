@@ -37,7 +37,7 @@ public final class DatabaseTasks {
      * Task that checks a condition from a query and
      * returns the indexes where the condition is met.
      */
-    public static class ConditionCheckTask implements Callable<List<Integer>> {
+    public static class ConditionCheckTask implements Callable<MyLinkedList<Integer>> {
 
         /** The list that will be checked against the condition. */
         private List<Object> listToCheck;
@@ -51,8 +51,8 @@ public final class DatabaseTasks {
         }
 
         @Override
-        public List<Integer> call() {
-            List<Integer> indexes = new ArrayList<>();
+        public MyLinkedList<Integer> call() {
+            MyLinkedList<Integer> indexes = new MyLinkedList<>();
 
             for (int i = 0; i < listToCheck.size(); i++) {
                 if (predicate.test(listToCheck.get(i))) {

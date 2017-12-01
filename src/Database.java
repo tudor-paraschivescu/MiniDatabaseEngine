@@ -72,7 +72,7 @@ public class Database implements MyDatabase {
         ArrayList<ArrayList<Object>> result = table.instantiateResultList(operations);
 
         // The indexes that respect the condition
-        List<Integer> indexes = getIndexes(table, condition);
+        MyLinkedList<Integer> indexes = getIndexes(table, condition);
 
         // No table entry met the condition
         if (indexes.size() == 0) {
@@ -87,7 +87,6 @@ public class Database implements MyDatabase {
 
             if (column != null) {
                 // Operation is a column name
-                // TODO: PARALLELIZE ME
                 for (Integer index : indexes) {
                     result.get(i).add(column.get(index));
                 }
@@ -159,9 +158,8 @@ public class Database implements MyDatabase {
         table.checkParametersUpdate(values, condition);
         table.checkDataTypesOfNewRow(values);
 
-        List<Integer> indexes = getIndexes(table, condition);
+        MyLinkedList<Integer> indexes = getIndexes(table, condition);
 
-        // TODO: PARALLELIZE ME
         for (Integer index : indexes) {
             Iterator<Object> valuesIterator = values.iterator();
             for (Map.Entry<String, ArrayList<Object>> entry : table.getColumnMap().entrySet()) {
@@ -192,15 +190,15 @@ public class Database implements MyDatabase {
     }
 
     /**
-     * Get the indexes of all the rows of a table where a certain condition is met
+     * Get the indexes of all the rows of a table where a certain condition is met.
      *
      * @param table     the table where the search is done
      * @param condition the condition
      * @return a list with all the indexes
      */
-    private List<Integer> getIndexes(final Table table, final String condition) {
+    private MyLinkedList<Integer> getIndexes(final Table table, final String condition) {
         // The indexes that respect the condition
-        List<Integer> indexes = new ArrayList<>();
+        MyLinkedList<Integer> indexes = new MyLinkedList<>();
 
         if (!condition.isEmpty()) {
             // Get the column that must be checked and the condition predicate
@@ -211,7 +209,7 @@ public class Database implements MyDatabase {
 
             // Partition the column so that each worker has an equal part to compute
             List<List<Object>> partitions = DatabaseTasks.partitionList(column, numWorkers);
-            List<Callable<List<Integer>>> tasks = new ArrayList<>(numWorkers);
+            List<Callable<MyLinkedList<Integer>>> tasks = new ArrayList<>(numWorkers);
 
             // Create the tasks
             for (List<Object> partition : partitions) {
@@ -220,9 +218,10 @@ public class Database implements MyDatabase {
 
             // Wait for the tasks to end and reunite the lists in the indexes list
             try {
-                List<Future<List<Integer>>> futures = workerService.invokeAll(tasks);
-                for (Future<List<Integer>> f : futures) {
-                    indexes.addAll(f.get());
+                List<Future<MyLinkedList<Integer>>> futures = workerService.invokeAll(tasks);
+                for (Future<MyLinkedList<Integer>> f : futures) {
+                    MyLinkedList<Integer> list = f.get();
+                    indexes.concat(list);
                 }
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
@@ -239,7 +238,7 @@ public class Database implements MyDatabase {
     }
 
     private int search(final List<List<Object>> partitions,
-                       final List<List<Integer>> indexesPartitons,
+                       final List<List<Integer>> indexesPartitions,
                        final BiFunction<Integer, Integer, Integer> function) {
 
         List<Callable<Integer>> tasks = new ArrayList<>(numWorkers);
@@ -248,7 +247,7 @@ public class Database implements MyDatabase {
         for (int i = 0; i < numWorkers; i++) {
             tasks.add(new DatabaseTasks.SearchTask(
                     partitions.get(i),
-                    indexesPartitons.get(i),
+                    indexesPartitions.get(i),
                     function));
         }
 
@@ -298,9 +297,9 @@ public class Database implements MyDatabase {
     /**
      * Return type used after parsing a condition to keep both of the column name and predicate.
      */
-    public static class ColumnNameAndPredicate {
-        String columnName;
-        Predicate<Object> conditionPredicate;
+    static class ColumnNameAndPredicate {
+        private String columnName;
+        private Predicate<Object> conditionPredicate;
 
         ColumnNameAndPredicate(final String columnName, final Predicate<Object> func) {
             this.columnName = columnName;
@@ -312,7 +311,7 @@ public class Database implements MyDatabase {
      * Return type used after parsing an aggregate function to keep both of
      * the column name and type of the function.
      */
-    public static class ColumnNameAndFunctionType {
+    static class ColumnNameAndFunctionType {
         private String columnName;
         private Table.AggregateFunction funcType;
 

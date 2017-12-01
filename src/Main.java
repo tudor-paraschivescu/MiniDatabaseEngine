@@ -16,7 +16,6 @@ public class Main {
 	// -- one client update in one table
 	// -- one client thread selects one table
 	
-	
 	public static void main(String[] args) throws Exception {
 		sanityCheck();
 		testConsistency();
