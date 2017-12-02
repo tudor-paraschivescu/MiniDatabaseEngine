@@ -2,7 +2,6 @@ import java.util.ArrayList;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 
-@SuppressWarnings("CheckStyle")
 public class ConsistencyWriterThreads extends Thread{
 
 	private MyDatabase db;
@@ -24,7 +23,7 @@ public class ConsistencyWriterThreads extends Thread{
 	}
 	
 	public void run() {
-		for(int i = 0; i < 100_000; i++) {
+		for(int i = 0; i < 1_000_000; i++) {
 			ArrayList<Object> values = new ArrayList<Object>();
 			values.add("Ion"+(i+(threadId*1_000_000)));
 			values.add(i+(threadId*1_000_000));

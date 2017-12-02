@@ -1,7 +1,6 @@
 import java.util.ArrayList;
 import java.util.concurrent.CyclicBarrier;
 
-@SuppressWarnings("CheckStyle")
 public class Main {
 
 	// - Test consistency 4 worker threads 4 client threads
@@ -15,6 +14,7 @@ public class Main {
 	// -- multiple clients insert in multiple tables
 	// -- one client update in one table
 	// -- one client thread selects one table
+	
 	
 	public static void main(String[] args) throws Exception {
 		sanityCheck();
@@ -86,7 +86,6 @@ public class Main {
 		CyclicBarrier barrier = new CyclicBarrier(numThreads+1);
 		ConsistencyWriterThreads[] threads = new ConsistencyWriterThreads[numThreads];
 		ConsistencyReaderThread thread = new ConsistencyReaderThread(db, barrier);
-		long startTime = System.currentTimeMillis();
 		thread.start();
 		for(int threadId=1; threadId < numThreads; threadId++) {
 			threads[threadId] = new ConsistencyWriterThreads(db, barrier, threadId);
@@ -96,8 +95,6 @@ public class Main {
 		barrier.await();
 		barrier.await();
 
-		long endTime = System.currentTimeMillis();
-		System.out.println((endTime - startTime) / 1000 + " seconds");
 		for(int threadId=1; threadId<numThreads; threadId++) {
 			threads[threadId].join();
 		}

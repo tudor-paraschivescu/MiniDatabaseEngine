@@ -12,14 +12,14 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 /**
- * Asynchronous Database System that implements the most basic commands (select, insert and update).
+ * Parallel Database System that implements the most basic commands (select, insert and update).
  * Internally, the parallelism is implemented using an Executor Service with a fixed thread pool.
  */
-public class Database implements MyDatabase {
+public final class Database implements MyDatabase {
 
     /**
      * Maps the name of the tables to the corresponding table.
-     * Can be used to create more tables in the same time from different users.
+     * Can be used to create more tables in the same time by different users.
      */
     private ConcurrentHashMap<String, Table> tableMap;
 
@@ -33,7 +33,7 @@ public class Database implements MyDatabase {
      */
     private ExecutorService workerService;
 
-    public Database() {
+    Database() {
         // Create the concurrent hash map that will allow creating multiple tables at a time
         this.tableMap = new ConcurrentHashMap<>();
     }
@@ -53,8 +53,7 @@ public class Database implements MyDatabase {
 
     @Override
     public void createTable(final String tableName,
-                            final String[] columnNames,
-                            final String[] columnTypes) {
+                            final String[] columnNames, final String[] columnTypes) {
         Table newTable = new Table(columnNames, columnTypes);
         if (tableMap.putIfAbsent(tableName, newTable) != null) {
             // A table with the same name already exists
@@ -71,7 +70,7 @@ public class Database implements MyDatabase {
         table.checkParametersSelect(operations, condition);
         ArrayList<ArrayList<Object>> result = table.instantiateResultList(operations);
 
-        // The indexes that respect the condition
+        // Get the indexes that respect the condition
         MyLinkedList<Integer> indexes = getIndexes(table, condition);
 
         // No table entry met the condition
@@ -152,14 +151,17 @@ public class Database implements MyDatabase {
     @Override
     public void update(final String tableName, final ArrayList<Object> values,
                        final String condition) {
+
         Table table = tableMap.get(tableName);
         table.lockWrite();
 
         table.checkParametersUpdate(values, condition);
         table.checkDataTypesOfNewRow(values);
 
+        // Get the indexes that respect the condition
         MyLinkedList<Integer> indexes = getIndexes(table, condition);
 
+        // Iterate through the indexes that respect the condition and update those rows
         for (Integer index : indexes) {
             Iterator<Object> valuesIterator = values.iterator();
             for (Map.Entry<String, ArrayList<Object>> entry : table.getColumnMap().entrySet()) {
@@ -241,6 +243,15 @@ public class Database implements MyDatabase {
         return indexes;
     }
 
+    /**
+     * Search for a certain element in a number of partitions using a given function.
+     * The executor service will have numWorkers tasks to execute, one for each partition.
+     *
+     * @param partitions        the list of partitions
+     * @param indexesPartitions the list of indexes
+     * @param function          the function that will check
+     * @return the searched element
+     */
     private int search(final List<List<Object>> partitions,
                        final List<List<Integer>> indexesPartitions,
                        final BiFunction<Integer, Integer, Integer> function) {
@@ -250,15 +261,16 @@ public class Database implements MyDatabase {
         // Create the tasks
         for (int i = 0; i < numWorkers; i++) {
             tasks.add(new DatabaseTasks.SearchTask(
-                    partitions.get(i),
-                    indexesPartitions.get(i),
-                    function));
+                    partitions.get(i), indexesPartitions.get(i), function));
         }
 
-        // Wait for the tasks to end and compare the results
         try {
             int result = 0;
+
+            // Submit the tasks to the executor service and wait for them to end
             List<Future<Integer>> futures = workerService.invokeAll(tasks);
+
+            // Compare the results
             for (Future<Integer> f : futures) {
                 int value = f.get();
                 result = function.apply(result, value);
@@ -270,22 +282,31 @@ public class Database implements MyDatabase {
         }
     }
 
+    /**
+     * Sum all of the elements from a list of partitions.
+     *
+     * @param partitions       the list of partitions
+     * @param indexesPartitions the list of indexes
+     * @return the sum of all elements in the list
+     */
     private int sum(final List<List<Object>> partitions,
-                       final List<List<Integer>> indexesPartitons) {
+                    final List<List<Integer>> indexesPartitions) {
 
         List<Callable<Long>> tasks = new ArrayList<>(numWorkers);
 
         // Create the tasks
         for (int i = 0; i < numWorkers; i++) {
-            tasks.add(new DatabaseTasks.SumTask(
-                    partitions.get(i),
-                    indexesPartitons.get(i)));
+            tasks.add(new DatabaseTasks.SumTask(partitions.get(i), indexesPartitions.get(i)));
         }
 
         // Wait for the tasks to end and compare the results
         try {
             long sum = 0;
+
+            // Submit the tasks to the executor service and wait for them to end
             List<Future<Long>> futures = workerService.invokeAll(tasks);
+
+            // Sum up the results
             for (Future<Long> f : futures) {
                 sum += f.get();
             }
@@ -312,7 +333,7 @@ public class Database implements MyDatabase {
     }
 
     /**
-     * Return type used after parsing an aggregate function to keep both of
+     * Return type used after parsing an aggregation function to keep both of
      * the column name and type of the function.
      */
     static class ColumnNameAndFunctionType {

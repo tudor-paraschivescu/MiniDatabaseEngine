@@ -3,12 +3,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Class of a database table, that stores the data by columns.
- * Internally it uses HashMaps for fast column matching and data type casts.
+ * Internally it uses hash maps for fast column matching and data type casts.
  */
 class Table {
 
@@ -24,6 +23,9 @@ class Table {
         INTEGER, STRING, BOOLEAN
     }
 
+    /**
+     * Enumeration of the accepted aggregation function.
+     */
     public enum AggregateFunction {
         MIN, MAX, SUM, AVG, COUNT
     }
@@ -44,7 +46,7 @@ class Table {
     private int size = 0;
 
     /**
-     * Used to keep all operations on a table of blocking type.
+     * Used to keep all operations on a table synchronized.
      */
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
@@ -53,15 +55,8 @@ class Table {
      *
      * @param columnNames the names of the columns that will be in the table
      * @param columnTypes the data types of the columns that will be in the table
-     * @throws DatabaseExceptions.NullOrEmptyDataException if the parameters are null
-     * @throws DatabaseExceptions.InvalidDataException     if the arrays are of different length
-     * @throws DatabaseExceptions.UnknownDataTypeException if the columnTypes arrays contains an
-     *                                                     unknown type of data
      */
-    public Table(final String[] columnNames, final String[] columnTypes) throws
-            DatabaseExceptions.NullOrEmptyDataException,
-            DatabaseExceptions.InvalidDataException,
-            DatabaseExceptions.UnknownDataTypeException {
+    Table(final String[] columnNames, final String[] columnTypes) {
 
         if (columnNames == null || columnTypes == null) {
             throw new DatabaseExceptions.NullOrEmptyDataException();
@@ -71,6 +66,7 @@ class Table {
             throw new DatabaseExceptions.InvalidDataException();
         }
 
+        // Create all the columns and store their data types
         for (int i = 0; i < columnNames.length; i++) {
             switch (columnTypes[i]) {
                 case COLUMN_TYPE_STRING:
@@ -91,31 +87,43 @@ class Table {
         }
     }
 
-    public int getSize() {
+    int getSize() {
         return size;
     }
 
-    public HashMap<String, DataType> getDataTypeMap() {
+    HashMap<String, DataType> getDataTypeMap() {
         return dataTypeMap;
     }
 
-    public LinkedHashMap<String, ArrayList<Object>> getColumnMap() {
+    LinkedHashMap<String, ArrayList<Object>> getColumnMap() {
         return columnMap;
     }
 
-    public void lockRead() {
+    /**
+     * Lock the table for read operations.
+     */
+    void lockRead() {
         lock.readLock().lock();
     }
 
-    public void unlockRead() {
+    /**
+     * Unlock the table for read operations.
+     */
+    void unlockRead() {
         lock.readLock().unlock();
     }
 
-    public void lockWrite() {
+    /**
+     * Lock the table for write operations.
+     */
+    void lockWrite() {
         lock.writeLock().lock();
     }
 
-    public void unlockWrite() {
+    /**
+     * Unlock the table for write operations.
+     */
+    void unlockWrite() {
         lock.writeLock().unlock();
     }
 
@@ -124,7 +132,7 @@ class Table {
      *
      * @param values The values that will be inserted on each column
      */
-    public void insert(final ArrayList<Object> values) {
+    void insert(final ArrayList<Object> values) {
 
         if (values == null) {
             throw new DatabaseExceptions.NullOrEmptyDataException();
@@ -147,13 +155,13 @@ class Table {
         size++;
     }
 
-    public void checkParametersSelect(final String[] operations, final String condition) {
+    void checkParametersSelect(final String[] operations, final String condition) {
         if (operations == null || condition == null || operations.length == 0) {
             throw new DatabaseExceptions.NullOrEmptyDataException();
         }
     }
 
-    public void checkParametersUpdate(final ArrayList<Object> values, final String condition) {
+    void checkParametersUpdate(final ArrayList<Object> values, final String condition) {
         if (values == null || condition == null || values.size() == 0) {
             throw new DatabaseExceptions.NullOrEmptyDataException();
         }
@@ -163,7 +171,7 @@ class Table {
         }
     }
 
-    public ArrayList<ArrayList<Object>> instantiateResultList(final String[] operations) {
+    ArrayList<ArrayList<Object>> instantiateResultList(final String[] operations) {
         ArrayList<ArrayList<Object>> result = new ArrayList<>();
         for (String ignored : operations) {
             result.add(new ArrayList<>());
@@ -171,7 +179,7 @@ class Table {
         return result;
     }
 
-    public void checkDataTypesOfNewRow(final ArrayList<Object> values) {
+    void checkDataTypesOfNewRow(final ArrayList<Object> values) {
         // Check if the data type corresponds
         Iterator<Object> valuesIterator = values.iterator();
         for (Map.Entry<String, ArrayList<Object>> entry : columnMap.entrySet()) {

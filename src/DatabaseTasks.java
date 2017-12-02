@@ -5,55 +5,63 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 /**
- * Class that keeps inner static classes of the asynchronous tasks needed in the database system.
+ * Class that keeps inner static classes of the tasks needed in the database system.
  */
-public final class DatabaseTasks {
-
-    /** Enumerates the possible tasks that could be created. */
-    public enum TaskType {
-        CONDITION_CHECK, SELECT_COLUMN
-    }
+final class DatabaseTasks {
 
     private DatabaseTasks() {
     }
 
-    public static <T> List<List<T>> partitionList(final List<T> list, final int numThreads) {
+    /**
+     * Partition a list in numThreads partitions. Each partitions will have
+     * list.size() / numThreads elements, excepting the last partition which could be bigger if
+     * the size does not divide perfectly by the number of threads.
+     *
+     * @param list          the list to be partitioned
+     * @param numPartitions the number of partitions
+     * @param <T>           the type of elements in the list
+     * @return a list of numPartitions sub lists
+     */
+    static <T> List<List<T>> partitionList(final List<T> list, final int numPartitions) {
 
-        List<List<T>> partitionLists = new ArrayList<>(numThreads);
-        int partitionSize = list.size() / numThreads;
+        List<List<T>> partitionLists = new ArrayList<>(numPartitions);
+        int partitionSize = list.size() / numPartitions;
 
         // Initialize first partitions - 1 sub lists
-        for (int i = 0; i < numThreads - 1; i++) {
+        for (int i = 0; i < numPartitions - 1; i++) {
             partitionLists.add(list.subList(i * partitionSize, (i + 1) * partitionSize));
         }
 
         // Initialize last sub list (which could have a bigger partition)
-        partitionLists.add(list.subList((numThreads - 1) * partitionSize, list.size()));
+        partitionLists.add(list.subList((numPartitions - 1) * partitionSize, list.size()));
 
         return partitionLists;
     }
 
     /**
-     * Task that checks a condition from a query and
-     * returns the indexes where the condition is met.
+     * Task that checks a condition and returns the indexes where the condition is met.
      */
-    public static class ConditionCheckTask implements Callable<MyLinkedList<Integer>> {
+    static class ConditionCheckTask implements Callable<MyLinkedList<Integer>> {
 
-        /** The list that will be checked against the condition. */
+        /**
+         * The list that will be checked against the condition.
+         */
         private List<Object> listToCheck;
 
-        /** The condition that must be checked for an index to be added. */
+        /**
+         * The condition that must be checked for an index to be added.
+         */
         private Predicate<Object> predicate;
 
-        public ConditionCheckTask(final List<Object> list, final Predicate<Object> condition) {
+        ConditionCheckTask(final List<Object> list, final Predicate<Object> condition) {
             this.listToCheck = list;
             this.predicate = condition;
         }
 
         @Override
         public MyLinkedList<Integer> call() {
-            MyLinkedList<Integer> indexes = new MyLinkedList<>();
 
+            MyLinkedList<Integer> indexes = new MyLinkedList<>();
             for (int i = 0; i < listToCheck.size(); i++) {
                 if (predicate.test(listToCheck.get(i))) {
                     indexes.add(i);
@@ -65,21 +73,27 @@ public final class DatabaseTasks {
     }
 
     /**
-     * Task that searches for an element in a list at given indexes.
+     * Task that searches for an element in a list at given indexes using a given function.
      */
-    public static class SearchTask implements Callable<Integer> {
+    static class SearchTask implements Callable<Integer> {
 
-        /** The list that will be searched. */
+        /**
+         * The list that will be searched.
+         */
         private List<Object> listToSearch;
 
-        /** The list that keeps the indexes. */
+        /**
+         * The list that keeps the indexes.
+         */
         private List<Integer> indexes;
 
-        /** The function that must be checked for the element to be changed. */
+        /**
+         * The function that must be checked for the element to be changed.
+         */
         private BiFunction<Integer, Integer, Integer> function;
 
-        public SearchTask(final List<Object> list, final List<Integer> indexes,
-                          final BiFunction<Integer, Integer, Integer> function) {
+        SearchTask(final List<Object> list, final List<Integer> indexes,
+                   final BiFunction<Integer, Integer, Integer> function) {
             this.listToSearch = list;
             this.indexes = indexes;
             this.function = function;
@@ -99,15 +113,19 @@ public final class DatabaseTasks {
      * Task that makes the sum of the element in the list at given indexes.
      * The call() method returns a long to try to avoid overflow.
      */
-    public static class SumTask implements Callable<Long> {
+    static class SumTask implements Callable<Long> {
 
-        /** The list that will be summed. */
+        /**
+         * The list that will be summed.
+         */
         private List<Object> listToSum;
 
-        /** The list that keeps the indexes. */
+        /**
+         * The list that keeps the indexes.
+         */
         private List<Integer> indexes;
 
-        public SumTask(final List<Object> list, final List<Integer> indexes) {
+        SumTask(final List<Object> list, final List<Integer> indexes) {
             this.listToSum = list;
             this.indexes = indexes;
         }

@@ -1,7 +1,10 @@
 import java.util.HashMap;
 import java.util.function.Predicate;
 
-public final class Parser {
+/**
+ * Class with static methods that do the parsing of the input.
+ */
+final class Parser {
 
     // Constants used to correctly tokenize the condition
     private static final String SEPARATOR_REGEX = " ";
@@ -16,7 +19,7 @@ public final class Parser {
     private static final String TRUE = "true";
     private static final String FALSE = "false";
 
-    // Constants used to correctly tokenize the function
+    // Constants used to correctly tokenize the aggregation function
     private static final String PARENTHESIS_REGEX = "[()]";
     private static final int FUNCTION_TOKENS = 2;
 
@@ -30,11 +33,16 @@ public final class Parser {
     private Parser() {
     }
 
-    public static Database.ColumnNameAndPredicate parseCondition(
-            final HashMap<String, Table.DataType> dataTypeMap, final String condition) throws
-            DatabaseExceptions.InvalidConditionException,
-            DatabaseExceptions.InvalidDataTypeException,
-            DatabaseExceptions.UnknownComparatorException {
+    /**
+     * Get the name of the column to be checked and the predicate that represents the condition.
+     *
+     * @param dataTypeMap maps the name of a column to the data type of that column
+     * @param condition   not-empty condition in "columnName comparator value" format
+     * @return an instance that keeps the name of the column to be checked and the predicate that
+     * will be used in checking the condition
+     */
+    static Database.ColumnNameAndPredicate parseCondition(
+            final HashMap<String, Table.DataType> dataTypeMap, final String condition) {
 
         // Tokenize the condition
         String[] tokens = condition.split(SEPARATOR_REGEX);
@@ -89,29 +97,19 @@ public final class Parser {
             }
         }
 
+        // Return the name of the column to be checked and the generated predicate
         return new Database.ColumnNameAndPredicate(columnName, func);
     }
 
     /**
-     * Return tha data type of a given String
-     * @param value the string that will be parsed
-     * @return the data type of the sequence
+     * Get the name of the column that will be computed and
+     * the aggregate function that represents the operation.
+     *
+     * @param operation operation in "operation(columnName)" format
+     * @return an instance that keeps the name of the column to be computed and the type of the
+     * aggregation function.
      */
-    public static Table.DataType parseDataType(final String value) {
-        if (value.equals(TRUE) || value.equals(FALSE)) {
-            return Table.DataType.BOOLEAN;
-        } else {
-            try {
-                Integer.parseInt(value);
-                return Table.DataType.INTEGER;
-            } catch (NumberFormatException n) {
-                return Table.DataType.STRING;
-            }
-        }
-    }
-
-    public static Database.ColumnNameAndFunctionType parseAggregationFunction(
-            final String operation) throws DatabaseExceptions.NullOrEmptyDataException {
+    static Database.ColumnNameAndFunctionType parseAggregationFunction(final String operation) {
 
         if (operation == null || operation.isEmpty()) {
             throw new DatabaseExceptions.NullOrEmptyDataException();
@@ -148,7 +146,27 @@ public final class Parser {
                 throw new DatabaseExceptions.UnknownFunctionException();
         }
 
+        // Return the name of the column to be computed and the type of the aggregation function
         return new Database.ColumnNameAndFunctionType(columnName, func);
+    }
+
+    /**
+     * Return tha data type of a given String representation.
+     *
+     * @param value the string that will be parsed
+     * @return the data type of the sequence
+     */
+    static Table.DataType parseDataType(final String value) {
+        if (value.equals(TRUE) || value.equals(FALSE)) {
+            return Table.DataType.BOOLEAN;
+        } else {
+            try {
+                Integer.parseInt(value);
+                return Table.DataType.INTEGER;
+            } catch (NumberFormatException n) {
+                return Table.DataType.STRING;
+            }
+        }
     }
 
 }
